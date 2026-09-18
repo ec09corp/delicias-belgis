@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // 1. PRODUCTS & PRODUCTOS (Catálogo del Menú Digital)
+    match /products/{productId} {
+      allow read, write: if true;
+    }
+    match /productos/{productoId} {
+      allow read, write: if true;
+    }
+
+    // 2. ORDERS & PEDIDOS (Flujo en tiempo real Menú -> Caja)
+    match /orders/{orderId} {
+      allow read, write: if true;
+    }
+    match /pedidos/{pedidoId} {
+      allow read, write: if true;
+    }
+
+    // 3. USUARIOS
+    match /usuarios/{userId} {
+      allow read, write: if true;
+    }
+
+    // 4. CONFIGURACION
+    match /configuracion/{configId} {
+      allow read, write: if true;
+    }
+
+    // 5. VENTAS (Ventas históricas, manuales y eliminación)
+    match /ventas/{ventaId} {
+      allow read, write: if true;
+    }
+
+    // 6. CATEGORIAS: Lectura y gestión del catálogo
+    match /categorias/{categoriaId} {
+      allow read, write: if true;
+    }
+
+    // 7. CLIENTES: Registro de clientes
+    match /clientes/{clienteId} {
+      allow read, write: if true;
+    }
+
+    // 8. MOVIMIENTOS DE INVENTARIO: Control y auditoría de stock
+    match /movimientos_inventario/{movId} {
+      allow read, write: if true;
+    }
+    match /inventario_movimientos/{movId} {
+      allow read, write: if true;
+    }
+
+    // 9. PRODUCCIONES: Registro manual de fabricación diaria
+    match /producciones/{produccionId} {
+      allow read, write: if true;
+    }
+  }
+}

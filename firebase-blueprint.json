@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "Pedido del menú digital para Caja en tiempo real",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string", "description": "Nombre del cliente" },
+        "customerPhone": { "type": "string", "description": "Teléfono del cliente" },
+        "orderType": { "type": "string", "description": "para_recoger, delivery o consumo_local" },
+        "address": { "type": "string", "description": "Dirección para delivery" },
+        "items": { "type": "array", "description": "Lista de productos ordenados" },
+        "subtotal": { "type": "number", "description": "Subtotal" },
+        "total": { "type": "number", "description": "Total del pedido" },
+        "notes": { "type": "string", "description": "Comentarios o notas adicionales" },
+        "status": { "type": "string", "description": "pendiente, aceptado, preparando, listo, entregado, cancelado" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "customerPhone", "orderType", "items", "total", "status"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Producto del menú digital",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nombre del producto" },
+        "description": { "type": "string", "description": "Descripción del producto" },
+        "price": { "type": "number", "description": "Precio unitario" },
+        "image": { "type": "string", "description": "URL de imagen" },
+        "category": { "type": "string", "description": "Categoría" },
+        "available": { "type": "boolean", "description": "Disponibilidad para ordenar" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "category", "available"]
+    },
+    "Producto": {
+      "title": "Producto",
+      "description": "Producto del catálogo de Delicias Belgi",
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "description": "Nombre del producto",
+          "maxLength": 120
+        },
+        "descripcion": {
+          "type": "string",
+          "description": "Descripción detallada del producto",
+          "maxLength": 500
+        },
+        "precio": {
+          "type": "number",
+          "description": "Precio unitario en USD"
+        },
+        "categoria": {
+          "type": "string",
+          "description": "Categoría a la que pertenece el producto",
+          "maxLength": 80
+        },
+        "imagen": {
+          "type": "string",
+          "description": "URL de la imagen del producto",
+          "maxLength": 1000
+        },
+        "activo": {
+          "type": "boolean",
+          "description": "Indica si el producto está visible y disponible en la tienda pública"
+        },
+        "stock": {
+          "type": "number",
+          "description": "Cantidad disponible en existencia"
+        }
+      },
+      "required": ["nombre", "precio", "categoria", "activo", "stock"]
+    },
+    "Venta": {
+      "title": "Venta",
+      "description": "Registro histórico de una venta realizada",
+      "type": "object",
+      "properties": {
+        "producto": {
+          "type": "string",
+          "description": "Nombre del producto vendido",
+          "maxLength": 120
+        },
+        "cantidad": {
+          "type": "number",
+          "description": "Cantidad de unidades vendidas"
+        },
+        "precioUnitario": {
+          "type": "number",
+          "description": "Precio por unidad al momento de la venta"
+        },
+        "total": {
+          "type": "number",
+          "description": "Total generado por la venta (cantidad * precioUnitario)"
+        },
+        "fecha": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Fecha y hora de la venta"
+        }
+      },
+      "required": ["producto", "cantidad", "precioUnitario", "total", "fecha"]
+    },
+    "ConfiguracionNegocio": {
+      "title": "ConfiguracionNegocio",
+      "description": "Datos generales y contacto del negocio Delicias Belgi",
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "description": "Nombre comercial del negocio",
+          "maxLength": 100
+        },
+        "telefono": {
+          "type": "string",
+          "description": "Teléfono de contacto",
+          "maxLength": 40
+        },
+        "direccion": {
+          "type": "string",
+          "description": "Dirección física del establecimiento",
+          "maxLength": 200
+        },
+        "whatsapp": {
+          "type": "string",
+          "description": "Número de WhatsApp con código de país para recibir pedidos",
+          "maxLength": 40
+        },
+        "moneda": {
+          "type": "string",
+          "description": "Moneda utilizada para precios (ej. USD)",
+          "maxLength": 10
+        },
+        "actualizadoEn": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Fecha de actualización de configuración"
+        }
+      },
+      "required": ["nombre", "whatsapp", "moneda"]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Pedidos en tiempo real del menú digital para Caja y Administración"
+    },
+    "/pedidos/{pedidoId}": {
+      "schema": "Order",
+      "description": "Pedidos en tiempo real del menú digital para Caja y Administración"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Catálogo de productos del menú digital"
+    },
+    "/productos/{productoId}": {
+      "schema": "Producto",
+      "description": "Catálogo de productos para clientes y administración"
+    },
+    "/ventas/{ventaId}": {
+      "schema": "Venta",
+      "description": "Historial de ventas de Delicias Belgi"
+    },
+    "/inventario_movimientos/{movId}": {
+      "schema": "InventarioMovimiento",
+      "description": "Historial y auditoría de movimientos de inventario"
+    },
+    "/producciones/{produccionId}": {
+      "schema": "Produccion",
+      "description": "Registros de fabricación diaria de productos"
+    },
+    "/configuracion/negocio": {
+      "schema": "ConfiguracionNegocio",
+      "description": "Información pública y de contacto de Delicias Belgi"
+    }
+  }
+}

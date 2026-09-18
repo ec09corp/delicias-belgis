@@ -1,0 +1,6 @@
+{
+  "name": "Delicias Belgi",
+  "description": "Sistema de gestión y administración de Delicias Belgi: control de producción diaria, inventario en tiempo real, registro y anulación de ventas con sincronización automática de existencias, auditoría y dashboard ejecutivo con Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
