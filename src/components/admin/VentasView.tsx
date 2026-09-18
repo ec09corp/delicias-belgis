@@ -201,6 +201,7 @@ export const VentasView: React.FC<VentasViewProps> = ({
         observacion: observaciones.trim(),
         observaciones: observaciones.trim(),
         fecha: new Date().toISOString(),
+        allProductos: productos,
       });
 
       // Reset
@@ -280,8 +281,9 @@ export const VentasView: React.FC<VentasViewProps> = ({
     if (!deleteModalVenta || !deleteModalVenta.id) return;
     setIsDeleting(true);
     try {
-      await ventasService.deleteVenta(deleteModalVenta.id, {
+      await ventasService.deleteVenta(deleteModalVenta, {
         restaurarStock: restoreStockOnDelete,
+        allProductos: productos,
         usuario: currentUser.displayName || currentUser.email || 'Administrador',
       });
       setDeleteModalVenta(null);

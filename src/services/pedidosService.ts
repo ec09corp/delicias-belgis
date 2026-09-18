@@ -360,11 +360,21 @@ export const pedidosService = {
         // Record sale without double-counting
         if (shouldRecordSale && currentPedido) {
           const saleItemsSummary = currentPedido.productos.map((p) => `${p.cantidad}x ${p.nombre}`).join(', ');
+          const structuredItems = currentPedido.productos.map((p) => ({
+            productoId: p.id || '',
+            nombre: p.nombre,
+            cantidad: p.cantidad,
+            precio: p.precio || 0,
+            subtotal: p.subtotal || (p.cantidad * (p.precio || 0)),
+          }));
           await ventasService.createVenta({
+            items: structuredItems,
             producto: saleItemsSummary || `Pedido ${currentPedido.numeroPedido}`,
             cantidad: currentPedido.productos.reduce((acc, p) => acc + p.cantidad, 0) || 1,
             precioUnitario: currentPedido.total,
             total: currentPedido.total,
+            cliente: currentPedido.customerName || 'Cliente Pedido',
+            usuario: 'Caja / Sistema',
             fecha: new Date().toISOString(),
           }).catch(console.warn);
         }
@@ -388,11 +398,21 @@ export const pedidosService = {
 
       if (shouldRecordSale && currentPedido) {
         const saleItemsSummary = currentPedido.productos.map((p) => `${p.cantidad}x ${p.nombre}`).join(', ');
+        const structuredItems = currentPedido.productos.map((p) => ({
+          productoId: p.id || '',
+          nombre: p.nombre,
+          cantidad: p.cantidad,
+          precio: p.precio || 0,
+          subtotal: p.subtotal || (p.cantidad * (p.precio || 0)),
+        }));
         ventasService.createVenta({
+          items: structuredItems,
           producto: saleItemsSummary || `Pedido ${currentPedido.numeroPedido}`,
           cantidad: currentPedido.productos.reduce((acc, p) => acc + p.cantidad, 0) || 1,
           precioUnitario: currentPedido.total,
           total: currentPedido.total,
+          cliente: currentPedido.customerName || 'Cliente Pedido',
+          usuario: 'Caja / Sistema',
           fecha: new Date().toISOString(),
         }).catch(console.warn);
       }
