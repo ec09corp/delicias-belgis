@@ -33,7 +33,13 @@ export const authService = {
             callback(null);
             return;
           }
-          const role = await usuariosService.getUserRole(firebaseUser.uid, firebaseUser.email);
+          const { role, activo } = await usuariosService.getUserAccess(firebaseUser.uid, firebaseUser.email);
+          if (!activo) {
+            // Usuario desactivado por el administrador: no puede usar el panel
+            if (auth) await signOut(auth).catch(() => {});
+            callback(null);
+            return;
+          }
           callback({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
@@ -72,7 +78,11 @@ export const authService = {
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const u = userCredential.user;
-        const role = await usuariosService.getUserRole(u.uid, u.email);
+        const { role, activo } = await usuariosService.getUserAccess(u.uid, u.email);
+        if (!activo) {
+          await signOut(auth).catch(() => {});
+          throw Object.assign(new Error('Tu usuario está desactivado. Pide al administrador que lo active.'), { code: 'app/user-disabled' });
+        }
         return {
           uid: u.uid,
           email: u.email,
@@ -81,7 +91,9 @@ export const authService = {
         };
       } catch (error: any) {
         let msg = 'Error al iniciar sesión.';
-        if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        if (error.code === 'app/user-disabled' || error.code === 'auth/user-disabled') {
+          msg = 'Tu usuario está desactivado. Pide al administrador que lo active.';
+        } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
           msg = 'Credenciales inválidas. Verifique correo y contraseña.';
         } else if (error.code === 'auth/invalid-email') {
           msg = 'El formato del correo no es válido.';

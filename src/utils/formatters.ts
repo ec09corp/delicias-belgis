@@ -8,10 +8,56 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(safeAmount);
 }
 
+/** Fecha local (YYYY-MM-DD) sin el desfase de toISOString(), que usa UTC. */
+export function toLocalDateStr(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Hora local HH:mm (24 h). */
+export function toLocalTimeStr(d: Date = new Date()): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * Convierte una fecha guardada a Date. Las fechas "YYYY-MM-DD" se toman como
+ * medianoche local (new Date('YYYY-MM-DD') las toma en UTC y en Panamá caen el día anterior).
+ */
+export function parseFechaLocal(val: string | any): Date {
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val.trim())) {
+    const [y, m, d] = val.trim().split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  if (val && typeof val.toDate === 'function') return val.toDate();
+  return new Date(val);
+}
+
+/** Escapa un valor para CSV (comillas, comas y saltos de línea). */
+export function csvCell(val: unknown): string {
+  const s = val === undefined || val === null ? "" : String(val);
+  return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, "\"\"")}"` : s;
+}
+
+/** Descarga un CSV con BOM para que Excel muestre bien los acentos. */
+export function downloadCSV(filename: string, headers: string[], rows: unknown[][]): void {
+  const content = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function formatDate(dateStr: string | any): string {
   if (!dateStr) return '';
   try {
-    const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr.toDate ? dateStr.toDate() : new Date(dateStr);
+    const d = parseFechaLocal(dateStr);
     return new Intl.DateTimeFormat('es-ES', {
       year: 'numeric',
       month: 'short',
@@ -27,7 +73,7 @@ export function formatDate(dateStr: string | any): string {
 export function formatDateShort(dateStr: string | any): string {
   if (!dateStr) return '';
   try {
-    const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr.toDate ? dateStr.toDate() : new Date(dateStr);
+    const d = parseFechaLocal(dateStr);
     return new Intl.DateTimeFormat('es-ES', {
       year: 'numeric',
       month: 'short',

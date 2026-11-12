@@ -1,63 +1,65 @@
 rules_version = '2';
+// Reglas de Delicias Belgi.
+// - El menú público (productos, categorías y configuración) se puede leer sin iniciar sesión.
+// - Todo lo demás solo lo usa el personal: cuentas de Firebase Auth (no anónimas) con un
+//   documento activo en /usuarios/{uid}.
+// - Categorías, configuración y usuarios solo los cambia un administrador.
+// IMPORTANTE: este archivo no se publica solo. Para aplicarlo hay que pegarlo en
+// Firebase Console > Firestore Database > Reglas (o usar `firebase deploy --only firestore:rules`).
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
+
+    function isAuth() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function userDoc() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    }
+    function isStaff() {
+      return isAuth() && exists(userDoc()) && get(userDoc()).data.activo != false;
+    }
+    function isAdmin() {
+      return isStaff() && get(userDoc()).data.role == 'admin';
+    }
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+    function preDoc() {
+      return /databases/$(database)/documents/usuarios/$(myEmail());
     }
 
-    // 1. PRODUCTS & PRODUCTOS (Catálogo del Menú Digital)
-    match /products/{productId} {
-      allow read, write: if true;
-    }
-    match /productos/{productoId} {
-      allow read, write: if true;
-    }
+    // Menú público
+    match /productos/{id}    { allow read: if true; allow write: if isStaff(); }
+    match /products/{id}     { allow read: if true; allow write: if isStaff(); }
+    match /categorias/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /configuracion/{id}{ allow read: if true; allow write: if isAdmin(); }
 
-    // 2. ORDERS & PEDIDOS (Flujo en tiempo real Menú -> Caja)
-    match /orders/{orderId} {
-      allow read, write: if true;
-    }
-    match /pedidos/{pedidoId} {
-      allow read, write: if true;
-    }
-
-    // 3. USUARIOS
+    // Usuarios del panel
     match /usuarios/{userId} {
-      allow read, write: if true;
+      allow read: if isAuth();
+      // Al primer inicio de sesión: el usuario crea su propio documento como "caja",
+      // o con el rol que el administrador le dejó preparado en /usuarios/{correo}.
+      allow create: if isAdmin() || (
+        isAuth() && request.auth.uid == userId
+        && request.resource.data.email == myEmail()
+        && (
+          request.resource.data.role == 'caja'
+          || (exists(preDoc()) && get(preDoc()).data.role == request.resource.data.role)
+        )
+      );
+      allow update: if isAdmin();
+      // El usuario puede borrar el registro previo que el administrador creó con su correo.
+      allow delete: if isAdmin() || (isAuth() && resource.data.email == myEmail());
     }
 
-    // 4. CONFIGURACION
-    match /configuracion/{configId} {
-      allow read, write: if true;
-    }
-
-    // 5. VENTAS (Ventas históricas, manuales y eliminación)
-    match /ventas/{ventaId} {
-      allow read, write: if true;
-    }
-
-    // 6. CATEGORIAS: Lectura y gestión del catálogo
-    match /categorias/{categoriaId} {
-      allow read, write: if true;
-    }
-
-    // 7. CLIENTES: Registro de clientes
-    match /clientes/{clienteId} {
-      allow read, write: if true;
-    }
-
-    // 8. MOVIMIENTOS DE INVENTARIO: Control y auditoría de stock
-    match /movimientos_inventario/{movId} {
-      allow read, write: if true;
-    }
-    match /inventario_movimientos/{movId} {
-      allow read, write: if true;
-    }
-
-    // 9. PRODUCCIONES: Registro manual de fabricación diaria
-    match /producciones/{produccionId} {
-      allow read, write: if true;
-    }
+    // Operación diaria (admin y caja)
+    match /ventas/{id}                 { allow read, write: if isStaff(); }
+    match /orders/{id}                 { allow read, write: if isStaff(); }
+    match /pedidos/{id}                { allow read, write: if isStaff(); }
+    match /clientes/{id}               { allow read, write: if isStaff(); }
+    match /movimientos_inventario/{id} { allow read, write: if isStaff(); }
+    match /inventario_movimientos/{id} { allow read, write: if isStaff(); }
+    match /producciones/{id}           { allow read, write: if isStaff(); }
   }
 }

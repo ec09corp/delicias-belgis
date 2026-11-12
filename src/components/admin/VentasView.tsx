@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Venta, VentaItem, Producto, MetodoPago, UserAuth } from '../../types';
 import { ventasService } from '../../services/ventasService';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, toLocalDateStr, toLocalTimeStr, parseFechaLocal, downloadCSV } from '../../utils/formatters';
 
 interface VentasViewProps {
   ventas: Venta[];
@@ -74,7 +74,7 @@ export const VentasView: React.FC<VentasViewProps> = ({
   // Filtered sales
   const filteredVentas = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = toLocalDateStr(now);
 
     const day = now.getDay();
     const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -85,8 +85,8 @@ export const VentasView: React.FC<VentasViewProps> = ({
 
     return ventas.filter((v) => {
       // Period filter
-      const vDateStr = v.fecha || (v.createdAt ? v.createdAt.split('T')[0] : '');
-      const vDate = new Date(v.createdAt || v.fecha);
+      const vDateStr = v.fecha || (v.createdAt ? toLocalDateStr(new Date(v.createdAt)) : '');
+      const vDate = v.fecha ? parseFechaLocal(v.fecha) : new Date(v.createdAt || '');
 
       if (filterPeriod === 'hoy' && vDateStr !== todayStr) return false;
       if (filterPeriod === 'semana' && vDate < startOfWeek) return false;
@@ -200,7 +200,8 @@ export const VentasView: React.FC<VentasViewProps> = ({
         usuario: currentUser.email || 'Administrador',
         observacion: observaciones.trim(),
         observaciones: observaciones.trim(),
-        fecha: new Date().toISOString(),
+        fecha: toLocalDateStr(),
+        hora: toLocalTimeStr(),
         allProductos: productos,
       });
 
@@ -253,23 +254,16 @@ export const VentasView: React.FC<VentasViewProps> = ({
         v.id,
         v.fecha || v.createdAt || '',
         v.cliente || 'Mostrador',
-        `"${itemsStr}"`,
+        itemsStr,
         Number(v.total).toFixed(2),
         v.metodoPago || 'Efectivo',
         v.usuario || '',
         v.anulada ? 'ANULADA' : 'COMPLETADA',
-        `"${v.motivoAnulacion || ''}"`,
+        v.motivoAnulacion || '',
       ];
     });
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `ventas_delicias_belgi_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCSV(`ventas_delicias_belgi_${toLocalDateStr()}.csv`, headers, rows);
   };
 
   const currentSaleTotal = saleItems.reduce(

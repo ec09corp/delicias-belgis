@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Categoria, Producto } from '../../types';
 import { categoriasService } from '../../services/categoriasService';
+import { productosService } from '../../services/productosService';
 
 interface CategoriasViewProps {
   categorias: Categoria[];
@@ -61,6 +62,15 @@ export const CategoriasView: React.FC<CategoriasViewProps> = ({
           nombre: nombre.trim(),
           descripcion: descripcion.trim(),
         });
+        // Los productos guardan el nombre de la categoría: al renombrarla se actualizan también
+        const nombreAnterior = editingCat.nombre;
+        if (nombreAnterior && nombreAnterior !== nombre.trim()) {
+          await Promise.all(
+            productos
+              .filter((p) => p.id && p.categoria === nombreAnterior)
+              .map((p) => productosService.updateProducto(p.id as string, { categoria: nombre.trim() }))
+          );
+        }
       } else {
         await categoriasService.createCategoria({
           nombre: nombre.trim(),

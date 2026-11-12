@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Producto, MovimientoInventario, UserAuth } from '../../types';
 import { inventarioService } from '../../services/inventarioService';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, toLocalDateStr, downloadCSV } from '../../utils/formatters';
 
 interface InventarioViewProps {
   productos: Producto[];
@@ -170,23 +170,16 @@ export const InventarioView: React.FC<InventarioViewProps> = ({
     const headers = ['Fecha', 'Producto', 'Tipo', 'Cantidad/Diferencia', 'Stock Anterior', 'Stock Nuevo', 'Motivo', 'Usuario'];
     const rows = filteredMovimientos.map((m) => [
       m.fecha || m.createdAt || '',
-      `"${m.producto || m.productoNombre || 'Producto'}"`,
+      m.producto || m.productoNombre || 'Producto',
       m.tipo.toUpperCase(),
       m.diferencia !== undefined ? m.diferencia : m.cantidad,
       m.cantidadAnterior ?? '',
       m.cantidadNueva ?? '',
-      `"${m.motivo || ''}"`,
+      m.motivo || '',
       m.usuario || '',
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `kardex_inventario_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCSV(`kardex_inventario_${toLocalDateStr()}.csv`, headers, rows);
   };
 
   return (

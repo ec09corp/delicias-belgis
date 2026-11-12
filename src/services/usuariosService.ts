@@ -7,6 +7,8 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  query,
+  where,
   QuerySnapshot,
   DocumentData,
 } from 'firebase/firestore';
@@ -59,33 +61,67 @@ function saveLocalUsuarios(list: UsuarioDoc[]) {
 
 export const usuariosService = {
   async getUserRole(uid: string, email?: string | null): Promise<UserRole> {
-    if (!uid) return 'caja';
+    return (await this.getUserAccess(uid, email)).role;
+  },
+
+  /**
+   * Rol y estado (activo) del usuario que inicia sesión.
+   * Los usuarios creados desde el panel se guardan con un id propio (usr-...), no con el
+   * uid de Firebase Auth; por eso, si no hay documento con su uid, se busca por correo y
+   * se vincula a su uid conservando el rol y el estado que le dio el administrador.
+   */
+  async getUserAccess(uid: string, email?: string | null): Promise<{ role: UserRole; activo: boolean }> {
+    if (!uid) return { role: 'caja', activo: true };
+    const cleanEmail = (email || '').trim().toLowerCase();
     if (isFirebaseConfigured() && db) {
       try {
         const userDocRef = doc(db, 'usuarios', uid);
         const userSnap = await getDoc(userDocRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
-          return (data.role as UserRole) || (data.rol as UserRole) || 'admin';
+          return {
+            role: (data.role as UserRole) || (data.rol as UserRole) || 'caja',
+            activo: data.activo !== false,
+          };
         }
+
+        if (cleanEmail) {
+          const emailSnap = await getDoc(doc(db, 'usuarios', cleanEmail));
+          const byEmail = emailSnap.exists()
+            ? [emailSnap]
+            : (await getDocs(query(collection(db, 'usuarios'), where('email', '==', cleanEmail)))).docs;
+          if (byEmail.length > 0) {
+            const preDoc = byEmail[0];
+            const data = preDoc.data() || {};
+            const role: UserRole = (data.role as UserRole) || (data.rol as UserRole) || 'caja';
+            const activo = data.activo !== false;
+            await setDoc(userDocRef, { ...data, id: uid, uid, email: cleanEmail, role, rol: role, activo });
+            if (preDoc.id !== uid) {
+              await deleteDoc(preDoc.ref).catch((e) => console.warn('No se pudo borrar el registro previo del usuario:', e));
+            }
+            return { role, activo };
+          }
+        }
+
         const allUsersSnap = await getDocs(collection(db, 'usuarios'));
         const assignedRole: UserRole = allUsersSnap.empty ? 'admin' : 'caja';
         await setDoc(userDocRef, {
           uid,
-          email: email || '',
+          email: cleanEmail,
           role: assignedRole,
           rol: assignedRole,
           activo: true,
           createdAt: new Date().toISOString(),
         });
-        return assignedRole;
+        return { role: assignedRole, activo: true };
       } catch (err) {
-        console.warn('Error reading/writing user role from Firestore, defaulting to admin:', err);
+        console.warn('Error leyendo el rol del usuario en Firestore; se usa el rol "caja":', err);
+        return { role: 'caja', activo: true };
       }
     }
     const local = getLocalUsuarios();
-    const found = local.find((u) => u.email === email || u.uid === uid);
-    return found?.role || found?.rol || 'admin';
+    const found = local.find((u) => u.email === cleanEmail || u.uid === uid);
+    return { role: found?.role || found?.rol || 'admin', activo: found ? found.activo !== false : true };
   },
 
   async getAllUsuarios(): Promise<UsuarioDoc[]> {
@@ -180,7 +216,9 @@ export const usuariosService = {
   },
 
   async createUsuario(data: Partial<UsuarioDoc>): Promise<UsuarioDoc> {
-    const id = data.uid || data.id || 'usr-' + Date.now();
+    // Sin uid de Firebase Auth, el documento se guarda con el correo como id para que,
+    // al iniciar sesión, se pueda vincular con su rol (y las reglas lo puedan comprobar).
+    const id = data.uid || data.id || (data.email || '').trim().toLowerCase() || 'usr-' + Date.now();
     const role = data.role || data.rol || 'caja';
     const newDoc: UsuarioDoc = {
       id,

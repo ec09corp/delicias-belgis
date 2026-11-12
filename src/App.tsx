@@ -82,6 +82,28 @@ export default function App() {
     }
   }, [cart]);
 
+  // El carrito se guarda en el navegador: al cargar el catálogo se actualizan precio, nombre
+  // e imagen de cada producto y se quitan los que ya no existen o no están disponibles.
+  useEffect(() => {
+    if (loadingProductos || productos.length === 0) return;
+    setCart((prev) => {
+      let changed = false;
+      const next: CartItem[] = [];
+      prev.forEach((item) => {
+        const fresh = productos.find((p) => p.id === item.producto.id);
+        const agotado = !fresh || fresh.disponible === false || (fresh.stock !== undefined && fresh.stock <= 0);
+        if (agotado) {
+          changed = true;
+          return;
+        }
+        const cantidad = Math.min(item.cantidad, maxPedido(fresh));
+        if (fresh !== item.producto || cantidad !== item.cantidad) changed = true;
+        next.push({ ...item, producto: fresh, cantidad });
+      });
+      return changed ? next : prev;
+    });
+  }, [productos, loadingProductos]);
+
   // Handle hash changes
   useEffect(() => {
     const handleHashChange = () => {
@@ -154,10 +176,15 @@ export default function App() {
   }, []);
 
   // Cart operations
+  // Máximo que se puede pedir de un producto (su stock, si lo tiene)
+  const maxPedido = (producto: Producto) =>
+    producto.stock !== undefined && producto.stock !== null ? Math.max(0, Number(producto.stock)) : Infinity;
+
   const handleAddToCart = (producto: Producto) => {
     if (!producto.id) return;
     setCart((prev) => {
       const existing = prev.find((item) => item.producto.id === producto.id);
+      if ((existing?.cantidad || 0) + 1 > maxPedido(producto)) return prev;
       if (existing) {
         return prev.map((item) =>
           item.producto.id === producto.id
@@ -176,7 +203,9 @@ export default function App() {
     }
     setCart((prev) =>
       prev.map((item) =>
-        item.producto.id === productId ? { ...item, cantidad: quantity } : item
+        item.producto.id === productId
+          ? { ...item, cantidad: Math.min(quantity, maxPedido(item.producto)) }
+          : item
       )
     );
   };

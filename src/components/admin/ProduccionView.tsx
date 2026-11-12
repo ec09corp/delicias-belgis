@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Producto, ProduccionRegistro, UserAuth } from '../../types';
 import { produccionService } from '../../services/produccionService';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, toLocalDateStr, parseFechaLocal } from '../../utils/formatters';
 
 interface ProduccionViewProps {
   producciones: ProduccionRegistro[];
@@ -40,7 +40,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
   // Form Fields
   const [selectedProductId, setSelectedProductId] = useState('');
   const [cantidad, setCantidad] = useState<number>(10);
-  const [fecha, setFecha] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState<string>(toLocalDateStr());
   const [observaciones, setObservaciones] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
   // Filtered productions
   const filteredProducciones = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = toLocalDateStr(now);
 
     const day = now.getDay();
     const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -62,8 +62,8 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     return producciones.filter((p) => {
-      const pDateStr = p.fecha.split('T')[0];
-      const pDate = new Date(p.fecha);
+      const pDateStr = p.fecha.includes('T') ? toLocalDateStr(new Date(p.fecha)) : p.fecha;
+      const pDate = parseFechaLocal(p.fecha);
 
       if (filterPeriod === 'hoy' && pDateStr !== todayStr) return false;
       if (filterPeriod === 'semana' && pDate < startOfWeek) return false;
@@ -96,7 +96,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
     setEditingProduccion(null);
     setSelectedProductId(productos[0]?.id || '');
     setCantidad(10);
-    setFecha(new Date().toISOString().split('T')[0]);
+    setFecha(toLocalDateStr());
     setObservaciones('');
     setFormError(null);
     setIsModalOpen(true);
@@ -104,9 +104,11 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
 
   const openEditModal = (rec: ProduccionRegistro) => {
     setEditingProduccion(rec);
-    setSelectedProductId(rec.productoId || '');
+    setSelectedProductId(
+      rec.productoId || productos.find((p) => p.nombre === rec.producto)?.id || ''
+    );
     setCantidad(rec.cantidad);
-    setFecha(rec.fecha ? rec.fecha.split('T')[0] : new Date().toISOString().split('T')[0]);
+    setFecha(rec.fecha ? rec.fecha.split('T')[0] : toLocalDateStr());
     setObservaciones(rec.observacion || '');
     setFormError(null);
     setIsModalOpen(true);

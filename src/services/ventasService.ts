@@ -13,6 +13,7 @@ import { productosService } from './productosService';
 import { inventarioService } from './inventarioService';
 import { authService } from './authService';
 import { INITIAL_VENTAS } from './initialData';
+import { toLocalDateStr, toLocalTimeStr } from '../utils/formatters';
 
 const LOCAL_STORAGE_KEY = 'delicias_belgi_ventas';
 const DELETED_VENTAS_KEY = 'delicias_belgi_deleted_ventas';
@@ -83,9 +84,13 @@ function toSafeIsoString(val: any, fallback?: string): string {
 }
 
 function toSafeDateStr(val: any, fallback?: string): string {
-  if (!val) return fallback || new Date().toISOString().split('T')[0];
+  if (!val) return fallback || toLocalDateStr();
   if (typeof val === 'string') {
-    if (val.includes('T')) return val.split('T')[0];
+    if (val.includes('T')) {
+      // ISO con hora: usar la fecha local (en UTC una venta de la noche cae al día siguiente)
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? val.split('T')[0] : toLocalDateStr(d);
+    }
     if (val.includes('-')) return val.trim();
     if (val.includes('/')) {
       const parts = val.split('/');
@@ -96,8 +101,7 @@ function toSafeDateStr(val: any, fallback?: string): string {
     }
     return val;
   }
-  const iso = toSafeIsoString(val);
-  return iso.split('T')[0];
+  return toLocalDateStr(new Date(toSafeIsoString(val)));
 }
 
 function getLocalVentas(): Venta[] {
@@ -171,7 +175,7 @@ function normalizeVenta(id: string, data: any): Venta {
     subtotal: Number(data.subtotal) || total,
     metodoPago: data.metodoPago || 'Efectivo',
     fecha: rawFecha,
-    hora: String(data.hora || new Date().toTimeString().slice(0, 5)),
+    hora: String(data.hora || toLocalTimeStr(new Date(rawCreatedAt))),
     cliente: String(data.cliente || ''),
     observacion: String(data.observacion || ''),
     anulada: Boolean(data.anulada),
@@ -278,14 +282,16 @@ export const ventasService = {
     }
 
     // 2. Deduct inventory and record movements
+    const stockActual: Record<string, number> = {};
     for (const item of ventaData.items) {
       const prod = allProductos.find((p) => p.id === item.productoId);
       if (prod && prod.id) {
-        const currentStock = Number(prod.stock ?? 0);
+        const currentStock = stockActual[prod.id] ?? Number(prod.stock ?? 0);
         const newStock = Math.max(
           ventaData.permitirStockNegativo ? -999999 : 0,
           currentStock - item.cantidad
         );
+        stockActual[prod.id] = Math.max(0, newStock);
         await productosService.updateProducto(prod.id, {
           stock: Math.max(0, newStock),
           disponible: newStock > 0,
@@ -295,13 +301,13 @@ export const ventasService = {
           producto: prod.nombre,
           productoNombre: prod.nombre,
           cantidadAnterior: currentStock,
-          cantidadNueva: newStock,
+          cantidadNueva: Math.max(0, newStock),
           diferencia: -item.cantidad,
           cantidad: item.cantidad,
           tipo: 'salida',
           motivo: `Venta (${numeroVenta})`,
           usuario: ventaData.usuario || 'Administrador',
-          fecha: `${ventaData.fecha}T${ventaData.hora}:00Z`,
+          fecha: new Date(`${ventaData.fecha}T${ventaData.hora}:00`).toISOString(),
         });
       }
     }
@@ -335,7 +341,9 @@ export const ventasService = {
         const docRef = await addDoc(colRef, payload);
         docId = docRef.id;
       } catch (error: any) {
-        console.warn('Aviso: Venta guardada en almacenamiento local (Firestore usando fallback):', error?.message || error);
+        // Si no se guarda en la nube, la venta desaparecería al sincronizar: se avisa al usuario.
+        console.error('No se pudo guardar la venta en Firestore:', error);
+        throw new Error('No se pudo guardar la venta en la base de datos. Revisa tu conexión e inténtalo de nuevo.');
       }
     }
 
@@ -374,6 +382,7 @@ export const ventasService = {
           subtotal: Number(venta.total),
         }];
 
+    const stockActual: Record<string, number> = {};
     for (const item of items) {
       // Find matching product
       const prod = allProductos.find(
@@ -381,8 +390,9 @@ export const ventasService = {
                p.nombre.toLowerCase().trim() === item.nombre.toLowerCase().trim()
       );
       if (prod && prod.id) {
-        const currentStock = Number(prod.stock ?? 0);
+        const currentStock = stockActual[prod.id] ?? Number(prod.stock ?? 0);
         const restoredStock = currentStock + item.cantidad;
+        stockActual[prod.id] = restoredStock;
         await productosService.updateProducto(prod.id, {
           stock: restoredStock,
           disponible: true,
@@ -473,54 +483,6 @@ export const ventasService = {
     const clientName = (venta.cliente || '').trim() || 'Cliente Mostrador';
     const userName = (venta.usuario || '').trim() || 'Administrador';
 
-    // 1. Descontar stock de inventario automáticamente si deductStock no es false
-    if (venta.deductStock !== false && saleItems.length > 0) {
-      try {
-        const allProds = venta.allProductos && venta.allProductos.length > 0
-          ? venta.allProductos
-          : await productosService.getAllProductos();
-
-        for (const item of saleItems) {
-          const prod = allProds.find(
-            (p) => (item.productoId && p.id === item.productoId) ||
-                   p.nombre.toLowerCase().trim() === item.nombre.toLowerCase().trim()
-          );
-
-          if (prod && prod.id) {
-            const currentStock = Number(prod.stock ?? 0);
-            const newStock = Math.max(
-              venta.permitirStockNegativo ? -999999 : 0,
-              currentStock - item.cantidad
-            );
-
-            // Actualizar el stock del producto en el catálogo
-            await productosService.updateProducto(prod.id, {
-              stock: Math.max(0, newStock),
-              disponible: newStock > 0,
-              activo: newStock > 0,
-            });
-
-            // Registrar movimiento de salida en auditoría de inventario
-            await inventarioService.registrarMovimiento({
-              productoId: prod.id,
-              producto: prod.nombre,
-              productoNombre: prod.nombre,
-              cantidadAnterior: currentStock,
-              cantidadNueva: newStock,
-              diferencia: -item.cantidad,
-              cantidad: item.cantidad,
-              tipo: 'salida',
-              motivo: `Venta (${numeroVenta}) - ${clientName}`,
-              usuario: userName,
-              fecha: venta.fecha || now,
-            });
-          }
-        }
-      } catch (errStock) {
-        console.warn('Aviso: Error al descontar inventario durante la venta:', errStock);
-      }
-    }
-
     const summaryProduct = saleItems.map((i) => `${i.cantidad}x ${i.nombre}`).join(', ');
     const newVentaData: Record<string, any> = {
       numeroVenta,
@@ -530,8 +492,8 @@ export const ventasService = {
       total,
       subtotal,
       metodoPago: venta.metodoPago || 'Efectivo',
-      fecha: venta.fecha || now,
-      hora: venta.hora || now.split('T')[1]?.slice(0, 5) || '12:00',
+      fecha: toSafeDateStr(venta.fecha || now),
+      hora: venta.hora || toLocalTimeStr(),
       cliente: clientName,
       observacion: (venta.observacion || venta.observaciones || '').trim(),
       observaciones: (venta.observacion || venta.observaciones || '').trim(),
@@ -549,7 +511,58 @@ export const ventasService = {
         const docRef = await addDoc(colRef, newVentaData);
         docId = docRef.id;
       } catch (error: any) {
-        console.warn('Aviso: Venta guardada localmente (Firestore fallback):', error?.message || error);
+        console.error('No se pudo guardar la venta en Firestore:', error);
+        throw new Error('No se pudo guardar la venta en la base de datos. Revisa tu conexión e inténtalo de nuevo.');
+      }
+    }
+
+    // 2. Descontar stock (después de guardar la venta, para no descontar si no se guardó) de inventario automáticamente si deductStock no es false
+    if (venta.deductStock !== false && saleItems.length > 0) {
+      try {
+        const allProds = venta.allProductos && venta.allProductos.length > 0
+          ? venta.allProductos
+          : await productosService.getAllProductos();
+
+        const stockActual: Record<string, number> = {};
+        for (const item of saleItems) {
+          const prod = allProds.find(
+            (p) => (item.productoId && p.id === item.productoId) ||
+                   p.nombre.toLowerCase().trim() === item.nombre.toLowerCase().trim()
+          );
+
+          if (prod && prod.id) {
+            const currentStock = stockActual[prod.id] ?? Number(prod.stock ?? 0);
+            const newStock = Math.max(
+              venta.permitirStockNegativo ? -999999 : 0,
+              currentStock - item.cantidad
+            );
+
+            stockActual[prod.id] = Math.max(0, newStock);
+            // Actualizar el stock del producto en el catálogo
+            await productosService.updateProducto(prod.id, {
+              stock: Math.max(0, newStock),
+              disponible: newStock > 0,
+              activo: newStock > 0,
+            });
+
+            // Registrar movimiento de salida en auditoría de inventario
+            await inventarioService.registrarMovimiento({
+              productoId: prod.id,
+              producto: prod.nombre,
+              productoNombre: prod.nombre,
+              cantidadAnterior: currentStock,
+              cantidadNueva: Math.max(0, newStock),
+              diferencia: -item.cantidad,
+              cantidad: item.cantidad,
+              tipo: 'salida',
+              motivo: `Venta (${numeroVenta}) - ${clientName}`,
+              usuario: userName,
+              fecha: now,
+            });
+          }
+        }
+      } catch (errStock) {
+        console.warn('Aviso: Error al descontar inventario durante la venta:', errStock);
       }
     }
 
@@ -608,6 +621,7 @@ export const ventasService = {
               subtotal: Number(target.total),
             }];
 
+        const stockActual: Record<string, number> = {};
         for (const item of items) {
           const prod = allProds.find(
             (p) => (item.productoId && p.id === item.productoId) ||
@@ -615,8 +629,9 @@ export const ventasService = {
           );
 
           if (prod && prod.id) {
-            const currentStock = Number(prod.stock ?? 0);
+            const currentStock = stockActual[prod.id] ?? Number(prod.stock ?? 0);
             const restoredStock = currentStock + item.cantidad;
+            stockActual[prod.id] = restoredStock;
 
             await productosService.updateProducto(prod.id, {
               stock: restoredStock,

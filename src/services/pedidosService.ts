@@ -14,6 +14,7 @@ import { authService } from './authService';
 import { clientesService } from './clientesService';
 import { ventasService } from './ventasService';
 import { Pedido, PedidoEstado, PedidoProductoItem, TipoPedido } from '../types';
+import { toLocalDateStr } from '../utils/formatters';
 
 const LOCAL_STORAGE_KEY = 'delicias_belgi_pedidos';
 
@@ -56,7 +57,7 @@ function normalizePedido(docId: string, data: any): Pedido {
     }
   }
 
-  const fecha = data.fecha || createdAtStr.split('T')[0];
+  const fecha = data.fecha || toLocalDateStr(new Date(createdAtStr));
   const hora = data.hora || new Date(createdAtStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
   return {
@@ -226,7 +227,7 @@ export const pedidosService = {
     notas?: string;
   }): Promise<Pedido> {
     const now = new Date();
-    const fecha = now.toISOString().split('T')[0];
+    const fecha = toLocalDateStr(now);
     const hora = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
     const numeroPedido = generateNumeroPedido();
     const customerName = pedidoData.cliente.trim() || 'Cliente';
@@ -375,7 +376,7 @@ export const pedidosService = {
             total: currentPedido.total,
             cliente: currentPedido.customerName || 'Cliente Pedido',
             usuario: 'Caja / Sistema',
-            fecha: new Date().toISOString(),
+            fecha: toLocalDateStr(),
           }).catch(console.warn);
         }
         return;
@@ -413,7 +414,7 @@ export const pedidosService = {
           total: currentPedido.total,
           cliente: currentPedido.customerName || 'Cliente Pedido',
           usuario: 'Caja / Sistema',
-          fecha: new Date().toISOString(),
+          fecha: toLocalDateStr(),
         }).catch(console.warn);
       }
     }

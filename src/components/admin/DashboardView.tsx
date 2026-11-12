@@ -20,6 +20,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { Venta, Producto, ProduccionRegistro, AdminTab } from '../../types';
+import { toLocalDateStr, parseFechaLocal } from '../../utils/formatters';
 
 interface DashboardViewProps {
   ventas: Venta[];
@@ -42,7 +43,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
 
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = toLocalDateStr(now);
 
   // Start of week (Monday)
   const day = now.getDay();
@@ -65,8 +66,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       if (v.anulada) return;
       const total = Number(v.total) || 0;
       ventasHistorico += total;
-      const vDateStr = v.fecha || (v.createdAt ? v.createdAt.split('T')[0] : '');
-      const vDate = new Date(v.createdAt || v.fecha);
+      const vDateStr = v.fecha || (v.createdAt ? toLocalDateStr(new Date(v.createdAt)) : '');
+      const vDate = v.fecha ? parseFechaLocal(v.fecha) : new Date(v.createdAt || '');
 
       if (vDateStr === todayStr) {
         ventasHoy += total;
@@ -113,8 +114,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     producciones.forEach((p) => {
       const qty = Number(p.cantidad) || 0;
       prodTotal += qty;
-      const pDate = new Date(p.fecha);
-      if (p.fecha.startsWith(todayStr)) {
+      const pDate = parseFechaLocal(p.fecha);
+      if ((p.fecha.includes('T') ? toLocalDateStr(new Date(p.fecha)) : p.fecha) === todayStr) {
         prodHoy += qty;
       }
       if (pDate >= startOfWeek) {
@@ -180,7 +181,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     for (let i = temporalDays - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(now.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toLocalDateStr(d);
       const dayName = d.toLocaleDateString('es-ES', { weekday: 'short' });
       const dayNum = d.getDate();
       const label = `${dayName} ${dayNum}`;
@@ -190,7 +191,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     // Fill sales
     ventas.forEach((v) => {
       if (v.anulada) return;
-      const vDateStr = v.fecha || (v.createdAt ? v.createdAt.split('T')[0] : '');
+      const vDateStr = v.fecha || (v.createdAt ? toLocalDateStr(new Date(v.createdAt)) : '');
       if (dateMap[vDateStr]) {
         dateMap[vDateStr].ventas += Number(v.total) || 0;
       }
@@ -198,7 +199,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     // Fill production
     producciones.forEach((p) => {
-      const pDateStr = p.fecha.split('T')[0];
+      const pDateStr = p.fecha.includes('T') ? toLocalDateStr(new Date(p.fecha)) : p.fecha;
       if (dateMap[pDateStr]) {
         dateMap[pDateStr].produccion += Number(p.cantidad) || 0;
       }
